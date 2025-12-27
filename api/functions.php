@@ -1,11 +1,11 @@
 <?php
-function error_exit($error_code, $message) {
+function error_exit(int $error_code, string $message) : void {
     http_response_code($error_code);
     echo json_encode(["ok" => false, "error" => $message]);
     exit;
 }
 
-function curl_query($url, $options = []) : string {
+function curl_response(string $url, array $options = [], callable $after_exec = null) : string {
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
@@ -16,6 +16,9 @@ function curl_query($url, $options = []) : string {
     $response = curl_exec($ch);
     $error = curl_error($ch);
     curl_close($ch);
+    if ($after_exec !== null) {
+        $after_exec();
+    }
     if ($response === false)
         error_exit(500, "cURL error: " . $error);
     return $response;
