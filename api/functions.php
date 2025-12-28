@@ -1,6 +1,7 @@
 <?php
 function error_exit(int $error_code, string $message) : void {
     http_response_code($error_code);
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode(["ok" => false, "error" => $message]);
     exit;
 }
