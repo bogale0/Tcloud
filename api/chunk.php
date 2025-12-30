@@ -1,11 +1,12 @@
 <?php
-require_once 'include/db.php';
+require_once 'include/functions.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'GET')
     error_exit(405, "Method not allowed");
 if (!isset($_GET['file_id']) || !isset($_GET['chunk_id']))
     error_exit(400, "No id specified");
 
-$stmt = $db->prepare("select tg_file_id from chunks where file_id = ? and chunk_id = ?");
+require_once 'include/db.php';
+$stmt = $pdo->prepare("select tg_file_id from chunks where file_id = ? and chunk_id = ?");
 $stmt->execute([$_GET['file_id'], $_GET['chunk_id']]);
 $tg_file_id = $stmt->fetchColumn();
 if ($tg_file_id === false)

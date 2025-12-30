@@ -1,5 +1,5 @@
 <?php
-require_once 'include/db.php';
+require_once 'include/functions.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'GET')
     error_exit(405, "Method not allowed");
 if (!isset($_GET['path']))
@@ -7,7 +7,8 @@ if (!isset($_GET['path']))
 $target = check_path($_GET['path'], true);
 $file_id = file_get_contents($target);
 
-$stmt = $db->prepare("select size_t, chunk_count, created_at from files where file_id = ?");
+require_once 'include/db.php';
+$stmt = $pdo->prepare("select size_t, chunk_count, created_at from files where file_id = ?");
 $stmt->execute([$file_id]);
 $meta = $stmt->fetch();
 if ($meta === false)

@@ -1,6 +1,5 @@
 <?php
-require_once 'include/db.php';
-header('Content-Type: application/json; charset=utf-8');
+require_once 'include/functions.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST')
     error_exit(405, "Method not allowed");
 if (!isset($_POST['file_id']))
@@ -16,7 +15,8 @@ $file_id = $_POST['file_id'];
 $fp = fopen('/tmp/file' . $file_id . '.lock', 'c');
 if (!flock($fp, LOCK_EX | LOCK_NB))
     error_exit(423, "File is locked, try again later");
-$stmt = $db->prepare("select chunk_count from files where id = ?");
+require_once 'include/db.php';
+$stmt = $pdo->prepare("select chunk_count from files where id = ?");
 $stmt->execute([$file_id]);
 $chunk_count = $stmt->fetchColumn();
 if ($chunk_count === false)
@@ -39,12 +39,12 @@ if ($response["ok"] !== true)
 $tg_msg_id = $response["result"]["message_id"];
 $tg_file_id = $response["result"]["document"]["file_id"];
 $size_t = $response["result"]["document"]["file_size"];
-$stmt = $db->prepare("update files set size_t = size_t + ?, chunk_count = chunk_count + 1 where id = ?");
+$stmt = $pdo->prepare("update files set size_t = size_t + ?, chunk_count = chunk_count + 1 where id = ?");
 $stmt->execute([$size_t, $file_id]);
-$stmt = $db->prepare("insert into chunks values (?, ?, ?, ?)");
+$stmt = $pdo->prepare("insert into chunks (file_id, chunk_id, tg_file_id, tg_msg_id) values (?, ?, ?, ?)");
 $stmt->execute([$file_id, ++$chunk_count, $tg_file_id, $tg_msg_id]);
 flock($fp, LOCK_UN);
 fclose($fp);
 http_response_code(200);
-echo json_encode(["ok" => true, "chunk_number" => $chunk_count]);
+echo json_encode(["ok" => true]);
 ?>
