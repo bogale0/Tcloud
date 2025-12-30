@@ -24,10 +24,11 @@ $response = json_decode($response, true);
 if ($response["ok"] !== true)
     error_exit(500, "Telegram error: " . $response["description"]);
 
-$data = curl_response("https://api.telegram.org/file/bot$bot_id/" . $response["result"]["file_path"]);
 http_response_code(200);
 header('Content-Type: application/octet-stream');
 header('Content-Disposition: attachment');
-header('Content-Length: ' . strlen($data));
-echo $data;
+curl_response("https://api.telegram.org/file/bot$bot_id/" . $response["result"]["file_path"], [
+    CURLOPT_RETURNTRANSFER => false,
+    CURLOPT_FILE => STDOUT,
+]);
 ?>
