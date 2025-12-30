@@ -1,0 +1,33 @@
+<?php
+require_once 'functions.php';
+if ($_SERVER['REQUEST_METHOD'] !== 'GET')
+    error_exit(405, "Method not allowed");
+if (!isset($_GET['file_id']) || !isset($_GET['chunk_id']))
+    error_exit(400, "No id specified");
+
+$file_id = $_GET['file_id'];
+$chunk_id = $_GET['chunk_id'];
+$stmt = $db->prepare("select tg_file_id from chunks where file_id = ? and chunk_id = ?");
+$stmt->execute([$file_id, $chunk_id]);
+$chunk = $stmt->fetch();
+if ($chunk === false)
+    error_exit(404, "Chunk not found");
+
+$bot_id = trim(file_get_contents(__DIR__ . '/../secret/tgbot.id'));
+$response = curl_response("https://api.telegram.org/bot$bot_id/getFile", [
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => [
+        'file_id' => $chunk['tg_file_id'],
+    ],
+]);
+$response = json_decode($response, true);
+if ($response["ok"] !== true)
+    error_exit(500, "Telegram error: " . $response["description"]);
+
+$data = curl_response("https://api.telegram.org/file/bot$bot_id/" . $response["result"]["file_path"]);
+http_response_code(200);
+header('Content-Type: application/octet-stream');
+header('Content-Disposition: attachment');
+header('Content-Length: ' . strlen($data));
+echo $data;
+?>

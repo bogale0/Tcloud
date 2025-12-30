@@ -6,7 +6,7 @@ function error_exit(int $error_code, string $message) : void {
     exit;
 }
 
-function curl_response(string $url, array $options = [], callable $after_exec = null) : string {
+function curl_response(string $url, array $options = [], ?callable $after_exec = null) : string {
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
@@ -17,11 +17,10 @@ function curl_response(string $url, array $options = [], callable $after_exec = 
     $response = curl_exec($ch);
     $error = curl_error($ch);
     curl_close($ch);
-    if ($after_exec !== null) {
+    if ($after_exec !== null)
         $after_exec();
-    }
     if ($response === false)
-        error_exit(500, "cURL error: " . $error);
+        error_exit(500, "curl error: " . $error);
     return $response;
 }
 ?>
