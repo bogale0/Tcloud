@@ -7,6 +7,7 @@ if (!isset($_POST['path']))
 if (!isset($_POST['type']))
     error_exit(400, "No type specified");
 $target = check_path($_POST['path'], false);
+$result = ["ok" => true];
 
 switch ($_POST['type']) {
     case 'd':
@@ -16,10 +17,10 @@ switch ($_POST['type']) {
     case 'f':
         require_once 'include/db.php';
         $stmt = $pdo->query("insert into files () values ()");
-        $stmt->execute();
         $file_id = $pdo->lastInsertId();
         if ($file_id === false || file_put_contents($target, $file_id) === false)
             error_exit(500, "Failed to create file");
+        $result['file_id'] = $file_id;
         break;
     default:
         error_exit(400, "Invalid type specified");
@@ -27,5 +28,5 @@ switch ($_POST['type']) {
 
 http_response_code(200);
 header('Content-Type: application/json');
-echo json_encode(["ok" => true]);
+echo json_encode($result);
 ?>

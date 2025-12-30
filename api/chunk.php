@@ -26,8 +26,9 @@ if ($response["ok"] !== true)
 http_response_code(200);
 header('Content-Type: application/octet-stream');
 header('Content-Disposition: attachment');
+header('Content-Length: ' . $response["result"]["file_size"]);
 curl_response("https://api.telegram.org/file/bot$bot_id/" . $response["result"]["file_path"], [
     CURLOPT_RETURNTRANSFER => false,
-    CURLOPT_FILE => STDOUT,
+    CURLOPT_FILE => fopen('php://output', 'wb'),
 ]);
 ?>

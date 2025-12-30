@@ -16,7 +16,7 @@ $fp = fopen('/tmp/file' . $file_id . '.lock', 'c');
 if (!flock($fp, LOCK_EX | LOCK_NB))
     error_exit(423, "File is locked, try again later");
 require_once 'include/db.php';
-$stmt = $pdo->prepare("select chunk_count from files where id = ?");
+$stmt = $pdo->prepare("select chunk_count from files where file_id = ?");
 $stmt->execute([$file_id]);
 $chunk_count = $stmt->fetchColumn();
 if ($chunk_count === false)
@@ -39,7 +39,7 @@ if ($response["ok"] !== true)
 $tg_msg_id = $response["result"]["message_id"];
 $tg_file_id = $response["result"]["document"]["file_id"];
 $size_t = $response["result"]["document"]["file_size"];
-$stmt = $pdo->prepare("update files set size_t = size_t + ?, chunk_count = chunk_count + 1 where id = ?");
+$stmt = $pdo->prepare("update files set size_t = size_t + ?, chunk_count = chunk_count + 1 where file_id = ?");
 $stmt->execute([$size_t, $file_id]);
 $stmt = $pdo->prepare("insert into chunks (file_id, chunk_id, tg_file_id, tg_msg_id) values (?, ?, ?, ?)");
 $stmt->execute([$file_id, ++$chunk_count, $tg_file_id, $tg_msg_id]);

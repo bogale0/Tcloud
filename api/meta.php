@@ -8,7 +8,7 @@ $target = check_path($_GET['path'], true);
 $file_id = file_get_contents($target);
 
 require_once 'include/db.php';
-$stmt = $pdo->prepare("select size_t, chunk_count, created_at from files where file_id = ?");
+$stmt = $pdo->prepare("select * from files where file_id = ?");
 $stmt->execute([$file_id]);
 $meta = $stmt->fetch();
 if ($meta === false)
