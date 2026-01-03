@@ -19,6 +19,7 @@ foreach (scandir($target) as $entry) {
         $files[] = $entry;
     }
 }
+
 http_response_code(200);
 header('Content-Type: application/json');
 echo json_encode(["ok" => true, "files" => $files, "dirs" => $dirs]);
