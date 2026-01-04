@@ -1,5 +1,5 @@
 <?php
-require_once 'include/functions.php';
+require_once 'functions.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'GET')
     error_exit(405, "Method not allowed");
 if (!isset($_GET['path']))
@@ -19,8 +19,5 @@ foreach (scandir($target) as $entry) {
         $files[] = $entry;
     }
 }
-
-http_response_code(200);
-header('Content-Type: application/json');
-echo json_encode(["ok" => true, "files" => $files, "dirs" => $dirs]);
+success_exit(["ok" => true, "files" => $files, "dirs" => $dirs]);
 ?>

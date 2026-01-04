@@ -1,0 +1,4 @@
+POST /add_chunk: file_id, chunk_id, @chunk
+GET /chunk: file_id, chunk_id => @chunk
+GET /ls: path => $(ls)
+GET /meta: path => $(file_meta)
