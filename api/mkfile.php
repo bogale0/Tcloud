@@ -10,11 +10,11 @@ $target = check_path($_POST['path'], false);
 $result = ["ok" => true];
 
 switch ($_POST['type']) {
-    case 'd':
+    case 'dir':
         if (!mkdir($target, 0700))
             error_exit(500, "Failed to create directory");
         break;
-    case 'f':
+    case 'file':
         $fp = fopen($target, 'w');
         if (!flock($fp, LOCK_EX | LOCK_NB))
             error_exit(423, "File is being created by another process");

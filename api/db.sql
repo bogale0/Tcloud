@@ -1,4 +1,4 @@
-use storage;
+use tcloud;
 create table files (
     file_id int primary key auto_increment,
     size_t bigint default 0,

@@ -11,12 +11,12 @@ $file_id = file_get_contents($target);
 $meta = ["ok" => true];
 
 $pdo = db_init();
-$stmt = $pdo->prepare("select * from files where file_id = ?");
+$stmt = $pdo->prepare("select file_id, size_t, chunk_count from files where file_id = ?");
 $stmt->execute([$file_id]);
 $meta['file'] = $stmt->fetch();
 if ($meta['file'] === false)
     error_exit(404, "File not found");
-$stmt = $pdo->prepare("select chunk_id from chunks where file_id = ? order by chunk_id asc");
+$stmt = $pdo->prepare("select chunk_id as id from chunks where file_id = ? order by id asc");
 $stmt->execute([$file_id]);
 $meta['chunks'] = $stmt->fetchAll();
 success_exit($meta);

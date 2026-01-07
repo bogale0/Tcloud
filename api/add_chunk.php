@@ -1,5 +1,6 @@
 <?php
 require_once 'functions.php';
+$MAX_CHUNK_SIZE = 1024 * 1024;
 if ($_SERVER['REQUEST_METHOD'] !== 'POST')
     error_exit(405, "Method not allowed");
 $file_id = check_str_id($_POST['file_id']);
@@ -8,9 +9,8 @@ if (!isset($_FILES['chunk']))
     error_exit(400, "No chunk uploaded");
 if ($_FILES['chunk']['error'] !== UPLOAD_ERR_OK)
     error_exit(400, "Chunk upload error: " . $_FILES['chunk']['error']);
-$MAX_CHUNK_SIZE = 20 * 1024 * 1024;
 if ($_FILES['chunk']['size'] > $MAX_CHUNK_SIZE)
-    error_exit(400, "Chunk size exceeds limit of 20MB");
+    error_exit(400, "Chunk size exceeds limit of 1MiB");
 
 $pdo = db_init();
 $stmt = $pdo->prepare("select 1 from files where file_id = ?");

@@ -15,17 +15,17 @@ function error_exit(int $error_code, string $message) : void {
     exit;
 }
 
-function check_str_id(string $id) : int {
+function check_str_id(string $id) : string {
     if (!isset($id))
         error_exit(400, "No id specified");
     if (!filter_var($id, FILTER_VALIDATE_INT) || $id <= 0 || $id > 2147483647)
         error_exit(400, "Invalid id format");
-    return (int)$id;
+    return $id;
 }
 
 function db_init() : PDO {
     $password = trim(file_get_contents(__DIR__ . '/../secret/dbuser.pswd'));
-    $pdo = new PDO('mysql:host=localhost;dbname=storage;charset=utf8mb4', 'storage', $password);
+    $pdo = new PDO('mysql:host=localhost;dbname=tcloud;charset=utf8mb4', 'tcloud', $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
