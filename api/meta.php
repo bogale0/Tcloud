@@ -2,8 +2,6 @@
 require_once 'functions.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'GET')
     error_exit(405, "Method not allowed");
-if (!isset($_GET['path']))
-    error_exit(400, "No path specified");
 $target = check_path($_GET['path'], true);
 if (!is_file($target))
     error_exit(400, "Not a file");
@@ -11,7 +9,7 @@ $file_id = file_get_contents($target);
 $meta = ["ok" => true];
 
 $pdo = db_init();
-$stmt = $pdo->prepare("select file_id, size_t, chunk_count from files where file_id = ?");
+$stmt = $pdo->prepare("select file_id as id, file_size, chunk_count from files where file_id = ?");
 $stmt->execute([$file_id]);
 $meta['file'] = $stmt->fetch();
 if ($meta['file'] === false)

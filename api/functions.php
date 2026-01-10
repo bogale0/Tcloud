@@ -44,11 +44,13 @@ function check_bearer() : void {
     }
 }
 
-function curl_response(string $url, array $options = []) : string {
+function curl_response(string $url, bool $is_json = true, array $options = []) : mixed {
     $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    if ($is_json) {
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    }
     foreach ($options as $key => $value) {
         curl_setopt($ch, $key, $value);
     }
@@ -56,16 +58,25 @@ function curl_response(string $url, array $options = []) : string {
     $error = curl_error($ch);
     curl_close($ch);
     if ($response === false)
-        error_exit(500, "Curl error: " . $error);
+        error_exit("Curl error: " . $error);
+    if (!$is_json)
+        return $response;
+    $response = json_decode($response, true);
+    if ($response === null)
+        error_exit(500, "Invalid response from Telegram");
+    if ($response["ok"] !== true)
+        error_exit(500, "Telegram error: " . $response["description"]);
     return $response;
 }
 
 function check_path(string $path, bool $exists) : string {
+    if (!isset($path))
+        error_exit(400, "No path specified");
     $storage = realpath(__DIR__ . '/../storage');
     if ($exists)
-        $target = realpath($storage . '/' . $path);
+        $target = realpath("$storage/$path");
     else
-        $target = realpath($storage . '/' . dirname($path));
+        $target = realpath("$storage/" . dirname($path));
     if ($target === false || strpos($target, $storage) !== 0)
         error_exit(400, "Invalid path");
     if ($exists)
@@ -73,7 +84,7 @@ function check_path(string $path, bool $exists) : string {
     $name = basename($path);
     if (!preg_match('/^[a-zA-Z0-9._-]+$/', $name))
         error_exit(400, "Invalid file name");
-    $target .= '/' . $name;
+    $target .= "/$name";
     if (file_exists($target))
         error_exit(400, "File already exists");
     return $target;

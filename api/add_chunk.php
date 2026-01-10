@@ -1,16 +1,21 @@
 <?php
 require_once 'functions.php';
-$MAX_CHUNK_SIZE = 1024 * 1024;
+$MAX_CHUNK_SIZE = 20 * 1024 * 1024;
 if ($_SERVER['REQUEST_METHOD'] !== 'POST')
     error_exit(405, "Method not allowed");
 $file_id = check_str_id($_POST['file_id']);
 $chunk_id = check_str_id($_POST['chunk_id']);
+if (!isset($_POST['hash']))
+    error_exit(400, "No hash provided");
 if (!isset($_FILES['chunk']))
     error_exit(400, "No chunk uploaded");
 if ($_FILES['chunk']['error'] !== UPLOAD_ERR_OK)
     error_exit(400, "Chunk upload error: " . $_FILES['chunk']['error']);
-if ($_FILES['chunk']['size'] > $MAX_CHUNK_SIZE)
-    error_exit(400, "Chunk size exceeds limit of 1MiB");
+if ($_FILES['chunk']['size'] > $MAX_CHUNK_SIZE || $_FILES['chunk']['size'] <= 0)
+    error_exit(400, "Chunk size exceeds limits");
+$hash = hash_file('sha256', $_FILES['chunk']['tmp_name'], true);
+if ($hash !== base64_decode($_POST['hash'], true))
+    error_exit(400, "Hash mismatch");
 
 $pdo = db_init();
 $stmt = $pdo->prepare("select 1 from files where file_id = ?");
@@ -21,32 +26,28 @@ $stmt = $pdo->prepare("select 1 from chunks where file_id = ? and chunk_id = ?")
 $stmt->execute([$file_id, $chunk_id]);
 if ($stmt->fetch() !== false)
     error_exit(409, "Chunk already exists");
-$lock_file = '/tmp/chunk' . $file_id . '_' . $chunk_id . '.lock';
+$chunk_name = "chunk{$file_id}_{$chunk_id}";
+$lock_file = "/tmp/{$chunk_name}.lock";
 $fp = fopen($lock_file, 'c');
 if (!flock($fp, LOCK_EX | LOCK_NB))
     error_exit(423, "Chunk is being uploaded by another process");
+
 $bot_id = trim(file_get_contents(__DIR__ . '/../secret/tgbot.id'));
 $chat_id = trim(file_get_contents(__DIR__ . '/../secret/tgchat.id'));
-$response = curl_response("https://api.telegram.org/bot$bot_id/sendDocument", [
+$response = curl_response("https://api.telegram.org/bot$bot_id/sendDocument", true, [
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => [
         'chat_id' => $chat_id,
-        'document' => new CURLFile($_FILES['chunk']['tmp_name']),
+        'document' => new CURLFile($_FILES['chunk']['tmp_name'], null, $chunk_name),
     ],
 ]);
-
-$response = json_decode($response, true);
-if ($response === null)
-    error_exit(500, "Invalid response from Telegram");
-if ($response["ok"] !== true)
-    error_exit(500, "Telegram error: " . $response["description"]);
 $tg_msg_id = $response["result"]["message_id"];
 $tg_file_id = $response["result"]["document"]["file_id"];
-$size_t = $response["result"]["document"]["file_size"];
-$stmt = $pdo->prepare("update files set size_t = size_t + ?, chunk_count = chunk_count + 1 where file_id = ?");
-$stmt->execute([$size_t, $file_id]);
-$stmt = $pdo->prepare("insert into chunks (file_id, chunk_id, tg_file_id, tg_msg_id) values (?, ?, ?, ?)");
-$stmt->execute([$file_id, $chunk_id, $tg_file_id, $tg_msg_id]);
+$file_size = $response["result"]["document"]["file_size"];
+$stmt = $pdo->prepare("update files set file_size = file_size + ?, chunk_count = chunk_count + 1 where file_id = ?");
+$stmt->execute([$file_size, $file_id]);
+$stmt = $pdo->prepare("insert into chunks (file_id, chunk_id, chunk_hash, tg_file_id, tg_msg_id) values (?, ?, ?, ?, ?)");
+$stmt->execute([$file_id, $chunk_id, $hash, $tg_file_id, $tg_msg_id]);
 flock($fp, LOCK_UN);
 fclose($fp);
 unlink($lock_file);
