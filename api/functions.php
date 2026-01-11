@@ -1,6 +1,20 @@
 <?php
 check_bearer();
 
+function check_int_id(string $id) : void {
+    if (!filter_var($id, FILTER_VALIDATE_INT) || $id <= 0 || $id > 2147483647)
+        error_exit(400, "Invalid id format");
+}
+
+function log_write(string $line) : void {
+    $fp = fopen(__DIR__ . "/../api.log", 'a');
+    flock($fp, LOCK_EX);
+    if (fwrite($fp, "$line\n") === false)
+        error_exit("Logging error");
+    flock($fp, LOCK_UN);
+    fclose($fp);
+}
+
 function success_exit(array $response) : void {
     http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
@@ -13,14 +27,6 @@ function error_exit(int $error_code, string $message) : void {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(["ok" => false, "error" => $message]);
     exit;
-}
-
-function check_str_id(string $id) : string {
-    if (!isset($id))
-        error_exit(400, "No id specified");
-    if (!filter_var($id, FILTER_VALIDATE_INT) || $id <= 0 || $id > 2147483647)
-        error_exit(400, "Invalid id format");
-    return $id;
 }
 
 function db_init() : PDO {
@@ -70,8 +76,6 @@ function curl_response(string $url, bool $is_json = true, array $options = []) :
 }
 
 function check_path(string $path, bool $exists) : string {
-    if (!isset($path))
-        error_exit(400, "No path specified");
     $storage = realpath(__DIR__ . '/../storage');
     if ($exists)
         $target = realpath("$storage/$path");

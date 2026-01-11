@@ -3,9 +3,15 @@ function progress(int $current, int $total): void {
     echo "\rProgress: $current/$total";
 }
 
+function log_write(string $line) : void {
+    $path = getenv('HOME') . "/.tcloud/log";
+    if (file_put_contents($path, "$line\n", FILE_APPEND) === false)
+        error_exit("Logging error");
+}
+
 function error_exit(string $message): void {
     $fp = fopen('php://stderr', 'w');
-    fwrite($fp, $message . "\n");
+    fwrite($fp, "\n$message\n");
     fclose($fp);
     exit(1);
 }
@@ -65,7 +71,30 @@ function curl_response(string $url, bool $is_json = true, array $options = []) :
 }
 
 function ls(string $remote_path): void {
-    print_r(curl_response(get_config("address") . '/ls.php?path=' . urlencode($remote_path)));
+    $response = curl_response(get_config("address") . '/ls.php?path=' . urlencode($remote_path));
+    $max_name_size = 0;
+    foreach ($response['dirs'] as $dir) {
+        echo "dir:   $dir\n";
+        if (($len = strlen($dir)) > $max_name_size)
+            $max_name_size = $len;
+    }
+    foreach ($response['files'] as $file) {
+        if (($len = strlen($file['name'])) > $max_name_size)
+            $max_name_size = $len;
+    }
+    foreach ($response['files'] as $file) {
+        $filename = $file['name'] . str_repeat(" ", $max_name_size - strlen($file['name']));
+        $filesize = (double)$file['size'];
+        $unit_index = 0;
+        while ($filesize >= 1024) {
+            $filesize /= 1024;
+            $unit_index++;
+        }
+        $filesize = round($filesize, 2);
+        $units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+        $unit = $units[$unit_index];
+        echo "file:  $filename  $filesize $unit\n";
+    }
 }
 
 function mkdir_remote(string $remote_path): void {
@@ -97,6 +126,8 @@ function download(string $remote_from, string $local_to): void {
         $chunk_url = $address . $chunk_url['path'];
         $retries = 0;
         do {
+            if ($retries !== 0)
+                log_write("Attempt downloading from endpoint #$retries: file_id=$file_id, chunk_id=$chunk_id");
             $chunk_data = curl_response($chunk_url, false, [
                 CURLOPT_RETURNTRANSFER => true,
             ]);
@@ -106,7 +137,7 @@ function download(string $remote_from, string $local_to): void {
             error_exit("Chunk is corrupted");
         if (fwrite($fp, $data) === false)
             error_exit("Error writing local file");
-        usleep(200000);
+        usleep(500000);
     }
     fclose($fp);
     progress($chunk_count, $chunk_count);
@@ -148,7 +179,7 @@ function upload(string $local_from, string $remote_to): void {
                 'chunk' => new CURLStringFile($data, 'chunk'),
             ],
         ]);
-        usleep(200000);
+        usleep(500000);
     }
     fclose($fp);
     progress($chunk_count, $chunk_count);

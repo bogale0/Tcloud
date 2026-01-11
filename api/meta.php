@@ -2,6 +2,8 @@
 require_once 'functions.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'GET')
     error_exit(405, "Method not allowed");
+if (!isset($_GET['path']))
+    error_exit(400, "No path specified");
 $target = check_path($_GET['path'], true);
 if (!is_file($target))
     error_exit(400, "Not a file");

@@ -2,11 +2,13 @@
 require_once 'functions.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'GET')
     error_exit(405, "Method not allowed");
+if (!isset($_GET['path']))
+    error_exit(400, "No path specified");
 $target = check_path($_GET['path'], true);
 if (!is_dir($target))
     error_exit(400, "Not a directory");
 
-$dirs = $files = [];
+$dirs = $files = $filenames = $ids = [];
 foreach (scandir($target) as $entry) {
     if ($entry === '.' || $entry === '..')
         continue;
@@ -14,8 +16,19 @@ foreach (scandir($target) as $entry) {
     if (is_dir($path)) {
         $dirs[] = $entry;
     } else if (is_file($path)) {
-        $files[] = $entry;
+        $id = file_get_contents("$target/$entry");
+        $filenames[$id] = $entry;
+        $ids[] = $id;
     }
 }
-success_exit(["ok" => true, "files" => $files, "dirs" => $dirs]);
+
+if (!empty($ids)) {
+    $pdo = db_init();
+    $stmt = $pdo->prepare("select file_id, file_size from files where file_id in (?" . str_repeat(", ?", count($ids) - 1) . ")");
+    $stmt->execute($ids);
+    foreach ($stmt->fetchAll() as $record) {
+        $files[] = ["name" => $filenames[$record["file_id"]], "size" => $record["file_size"]];
+    }
+}
+success_exit(["ok" => true, "dirs" => $dirs, "files" => $files]);
 ?>

@@ -2,8 +2,13 @@
 require_once 'functions.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'GET')
     error_exit(405, "Method not allowed");
-$file_id = check_str_id($_GET['file_id']);
-$chunk_id = check_str_id($_GET['chunk_id']);
+if (!isset($_POST['file_id']) || !isset($_FILES['chunk_id']))
+    error_exit(400, "No id specified");
+$file_id = $_POST['file_id'];
+$chunk_id = $_POST['chunk_id'];
+check_int_id($file_id);
+check_int_id($chunk_id);
+
 $pdo = db_init();
 $stmt = $pdo->prepare("select chunk_hash, tg_file_id from chunks where file_id = ? and chunk_id = ?");
 $stmt->execute([$file_id, $chunk_id]);
@@ -33,6 +38,8 @@ do {
     $chunk_data = curl_response($chunk_url, false, [
         CURLOPT_RETURNTRANSFER => true,
     ]);
+    if ($retries !== 0)
+        log_write("Attempt downloading from Telegram #$retries: file_id=$file_id, chunk_id=$chunk_id, received=" . strlen($chunk_data));
     $chunk_hash = hash('sha256', $chunk_data, true);
 } while ($chunk_hash !== $chunk['chunk_hash'] && ++$retries < 3);
 if ($chunk_hash !== $chunk['chunk_hash'])

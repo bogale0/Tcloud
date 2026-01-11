@@ -2,6 +2,8 @@
 require_once 'functions.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST')
     error_exit(405, "Method not allowed");
+if (!isset($_POST['path']))
+    error_exit(400, "No path specified");
 if (!isset($_POST['type']))
     error_exit(400, "No type specified");
 $target = check_path($_POST['path'], false);

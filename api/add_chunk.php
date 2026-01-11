@@ -3,8 +3,12 @@ require_once 'functions.php';
 $MAX_CHUNK_SIZE = 20 * 1024 * 1024;
 if ($_SERVER['REQUEST_METHOD'] !== 'POST')
     error_exit(405, "Method not allowed");
-$file_id = check_str_id($_POST['file_id']);
-$chunk_id = check_str_id($_POST['chunk_id']);
+if (!isset($_POST['file_id']) || !isset($_POST['chunk_id']))
+    error_exit(400, "No id specified");
+$file_id = $_POST['file_id'];
+$chunk_id = $_POST['chunk_id'];
+check_int_id($file_id);
+check_int_id($chunk_id);
 if (!isset($_POST['hash']))
     error_exit(400, "No hash provided");
 if (!isset($_FILES['chunk']))
@@ -27,7 +31,7 @@ $stmt->execute([$file_id, $chunk_id]);
 if ($stmt->fetch() !== false)
     error_exit(409, "Chunk already exists");
 $chunk_name = "chunk{$file_id}_{$chunk_id}";
-$lock_file = "/tmp/{$chunk_name}.lock";
+$lock_file = "/tmp/$chunk_name.lock";
 $fp = fopen($lock_file, 'c');
 if (!flock($fp, LOCK_EX | LOCK_NB))
     error_exit(423, "Chunk is being uploaded by another process");
