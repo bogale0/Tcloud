@@ -1,11 +1,11 @@
 <?php
-require_once 'functions.php';
-if ($_SERVER['REQUEST_METHOD'] !== 'GET')
+require_once "functions.php";
+if ($_SERVER["REQUEST_METHOD"] !== "GET")
     error_exit(405, "Method not allowed");
-if (!isset($_POST['file_id']) || !isset($_FILES['chunk_id']))
+if (!isset($_GET["file_id"]) || !isset($_GET["chunk_id"]))
     error_exit(400, "No id specified");
-$file_id = $_POST['file_id'];
-$chunk_id = $_POST['chunk_id'];
+$file_id = $_GET["file_id"];
+$chunk_id = $_GET["chunk_id"];
 check_int_id($file_id);
 check_int_id($chunk_id);
 
@@ -15,35 +15,23 @@ $stmt->execute([$file_id, $chunk_id]);
 $chunk = $stmt->fetch();
 if ($chunk === false)
     error_exit(404, "Chunk not found");
-$chunk_name = "/chunks/{$file_id}_{$chunk_id}";
+$chunk_name = "/downloads/{$file_id}_{$chunk_id}";
 $chunk_path = __DIR__ . $chunk_name;
-if (file_exists($chunk_path) && hash_file('sha256', $chunk_path, true) === $chunk['chunk_hash']) {
+if (file_exists($chunk_path) && hash_file("sha256", $chunk_path, true) === $chunk["chunk_hash"])
     success_exit(["ok" => true, "path" => $chunk_name]);
-}
 
-$bot_id = trim(file_get_contents(__DIR__ . '/../secret/tgbot.id'));
-$response = curl_response("https://api.telegram.org/bot$bot_id/getFile", true, [
+$response = api_call("getFile", [
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => [
-        'file_id' => $chunk['tg_file_id'],
+        "file_id" => $chunk["tg_file_id"],
     ],
 ]);
-$fp = fopen("$chunk_path.lock", 'c');
+$fp = fopen("$chunk_path.lock", "c");
 if (!flock($fp, LOCK_EX | LOCK_NB))
     error_exit(423, "Chunk is being downloaded by another process");
-$chunk_url = "https://api.telegram.org/file/bot$bot_id/" . $response["result"]["file_path"];
-$retries = 0;
-do {
-    usleep($retries * 200000);
-    $chunk_data = curl_response($chunk_url, false, [
-        CURLOPT_RETURNTRANSFER => true,
-    ]);
-    if ($retries !== 0)
-        log_write("Attempt downloading from Telegram #$retries: file_id=$file_id, chunk_id=$chunk_id, received=" . strlen($chunk_data));
-    $chunk_hash = hash('sha256', $chunk_data, true);
-} while ($chunk_hash !== $chunk['chunk_hash'] && ++$retries < 3);
-if ($chunk_hash !== $chunk['chunk_hash'])
-    error_exit(500, "Chunk hash mismatch after download");
+$chunk_data = api_call("file", ["path" => $response["result"]["file_path"]]);
+if (hash("sha256", $chunk_data, true) !== $chunk["chunk_hash"])
+    error_exit(500, "Chunk hash mismatch after receiving " . strlen($chunk_data) . " for $chunk_name");
 file_put_contents($chunk_path, $chunk_data);
 flock($fp, LOCK_UN);
 fclose($fp);

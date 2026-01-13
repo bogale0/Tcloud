@@ -1,26 +1,44 @@
 <?php
-require_once 'functions.php';
-if ($_SERVER['REQUEST_METHOD'] !== 'DELETE')
+require_once "functions.php";
+if ($_SERVER["REQUEST_METHOD"] !== "DELETE")
     error_exit(405, "Method not allowed");
-if (!isset($_GET['path']))
+if (!isset($_GET["path"]))
     error_exit(400, "No path specified");
-$target = check_path($_GET['path'], true);
+$target = check_path($_GET["path"], true);
+if ($target == __DIR__ . "/../storage")
+    error_exit(400, "Cannot remove root directory");
+$pdo = db_init();
+
 if (is_dir($target)) {
-    if (count(scandir($target)) > 2)
-        error_exit(400, "Directory is not empty");
+    foreach (scandir($target) as $entry) {
+        if ($entry === "." || $entry === "..")
+            continue;
+        if (is_dir("$target/$entry"))
+            error_exit(409, "Cannot remove directory with subdirectories");
+    }
+    $fp = fopen("$target/.lock", "c");
+    if (!flock($fp, LOCK_EX | LOCK_NB))
+        error_exit(423, "Directory is being removed by another process");
+    foreach (scandir($target) as $entry) {
+        if ($entry === "." || $entry === ".." || $entry === ".lock")
+            continue;
+        $path = "$target/$entry";
+        $stmt = $pdo->prepare("delete from files where file_id = ?");
+        $stmt->execute([file_get_contents($path)]);
+        unlink($path);
+    }
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    unlink("$target/.lock");
     if (!rmdir($target))
         error_exit(500, "Cannot remove directory");
-} else if (is_file($target)) {
-    $file_id = file_get_contents($target);
-    $pdo = db_init();
-    $pdo->beginTransaction();
+}
+elseif (is_file($target)) {
     $stmt = $pdo->prepare("delete from files where file_id = ?");
-    $stmt->execute([$file_id]);
-    if (!unlink($target))
-        error_exit(500, "Cannot remove file");
-    $pdo->commit();
+    $stmt->execute([file_get_contents($target)]);
+    unlink($target);
 } else {
-    error_exit(500, "Unknown file type");
+    error_exit(400, "Unknown file type");
 }
 success_exit(["ok" => true]);
 ?>

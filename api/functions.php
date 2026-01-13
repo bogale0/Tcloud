@@ -6,32 +6,23 @@ function check_int_id(string $id) : void {
         error_exit(400, "Invalid id format");
 }
 
-function log_write(string $line) : void {
-    $fp = fopen(__DIR__ . "/../api.log", 'a');
-    flock($fp, LOCK_EX);
-    if (fwrite($fp, "$line\n") === false)
-        error_exit("Logging error");
-    flock($fp, LOCK_UN);
-    fclose($fp);
-}
-
 function success_exit(array $response) : void {
     http_response_code(200);
-    header('Content-Type: application/json; charset=utf-8');
+    header("Content-Type: application/json; charset=utf-8");
     echo json_encode($response);
     exit;
 }
 
 function error_exit(int $error_code, string $message) : void {
     http_response_code($error_code);
-    header('Content-Type: application/json; charset=utf-8');
+    header("Content-Type: application/json; charset=utf-8");
     echo json_encode(["ok" => false, "error" => $message]);
     exit;
 }
 
 function db_init() : PDO {
-    $password = trim(file_get_contents(__DIR__ . '/../secret/dbuser.pswd'));
-    $pdo = new PDO('mysql:host=localhost;dbname=tcloud;charset=utf8mb4', 'tcloud', $password);
+    $password = trim(file_get_contents(__DIR__ . "/../secret/dbuser.pswd"));
+    $pdo = new PDO("mysql:host=localhost;dbname=tcloud;charset=utf8mb4", "tcloud", $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
@@ -40,17 +31,50 @@ function db_init() : PDO {
 
 function check_bearer() : void {
     $headers = getallheaders();
-    if (!isset($headers['Authorization'])) {
+    if (!isset($headers["Authorization"]))
         error_exit(401, "Missing Authorization header");
-    }
-    $token = $headers['Authorization'];
-    $expected_token = trim(file_get_contents(__DIR__ . '/../secret/bearer.token'));
+    $token = $headers["Authorization"];
+    $expected_token = trim(file_get_contents(__DIR__ . "/../secret/bearer.token"));
     if ($token !== "Bearer $expected_token") {
         error_exit(403, "Invalid token");
     }
 }
 
-function curl_response(string $url, bool $is_json = true, array $options = []) : mixed {
+function api_call(string $method, array $options = []) : mixed {
+    $host = "https://api.telegram.org";
+    $bot_name = "bot" . trim(file_get_contents(__DIR__ . "/../secret/tgbot.id"));
+    if ($method === "file") {
+        $url = "$host/file/$bot_name/" . $options["path"];
+        $options = [CURLOPT_RETURNTRANSFER => true];
+        $is_json = false;
+    }
+    else {
+        $url = "$host/$bot_name/$method";
+        $is_json = true;
+    }
+    return curl_response($url, $is_json, $options);
+}
+
+function check_path(string $path, bool $exists) : string {
+    $storage = realpath(__DIR__ . "/../storage");
+    if ($exists)
+        $target = realpath("$storage/$path");
+    else
+        $target = realpath("$storage/" . dirname($path));
+    if ($target === false || strpos($target, $storage) !== 0)
+        error_exit(400, "Invalid path");
+    if ($exists)
+        return $target;
+    $name = basename($path);
+    if (!preg_match("/^[a-zA-Z0-9._-]+$/", $name))
+        error_exit(400, "Invalid file name");
+    $target .= "/$name";
+    if (file_exists($target))
+        error_exit(400, "File already exists");
+    return $target;
+}
+
+function curl_response(string $url, bool $is_json, array $options) : mixed {
     $ch = curl_init($url);
     if ($is_json) {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -73,24 +97,5 @@ function curl_response(string $url, bool $is_json = true, array $options = []) :
     if ($response["ok"] !== true)
         error_exit(500, "Telegram error: " . $response["description"]);
     return $response;
-}
-
-function check_path(string $path, bool $exists) : string {
-    $storage = realpath(__DIR__ . '/../storage');
-    if ($exists)
-        $target = realpath("$storage/$path");
-    else
-        $target = realpath("$storage/" . dirname($path));
-    if ($target === false || strpos($target, $storage) !== 0)
-        error_exit(400, "Invalid path");
-    if ($exists)
-        return $target;
-    $name = basename($path);
-    if (!preg_match('/^[a-zA-Z0-9._-]+$/', $name))
-        error_exit(400, "Invalid file name");
-    $target .= "/$name";
-    if (file_exists($target))
-        error_exit(400, "File already exists");
-    return $target;
 }
 ?>
