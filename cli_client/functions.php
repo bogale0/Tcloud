@@ -140,12 +140,18 @@ function download(string $remote_from, string $local_to): void {
 }
 
 function upload(string $local_from, string $remote_to): void {
-    if (!is_file($local_from))
+    if (!file_exists($local_from))
         error_exit("Local file does not exist");
-    $fp = fopen($local_from, "rb");
-    if ($fp === false)
-        error_exit("Cannot open local file");
-    $address = get_config("address");
+    $local_from = realpath($local_from);
+    $tcloud_dir = dirname($local_from) . "/.tcloud-upload-" . basename($local_from);
+    if (!is_dir($tcloud_dir) && !mkdir($tcloud_dir, 0700))
+        error_exit("Can't create directory $tcloud_dir");
+    $local_file = "$tcloud_dir/data.tar.gz";
+    exec("tar czf $local_file $local_from", $output, $err_code);
+    if ($err_code !== 0)
+        error_exit("Archiving error");
+    file_put_contents("$tcloud_dir/progress", 0);
+    $fp = fopen($local_file, "rb");
     $file_id = api_call("/mkfile.php", [
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => [
@@ -155,7 +161,7 @@ function upload(string $local_from, string $remote_to): void {
     ])["file_id"];
     $chunk_id = 0;
     $chunk_size = 20 * 1024 * 1024 - 28;
-    $chunk_count = ceil(filesize($local_from) / $chunk_size);
+    $chunk_count = ceil(filesize($local_file) / $chunk_size);
     while (!feof($fp)) {
         $data = fread($fp, $chunk_size);
         if ($data === false)
