@@ -3,6 +3,10 @@ function ban_avoidance() {
     usleep(1000000);
 }
 
+function tcloud_dir() : string {
+    return getenv("HOME") . "/.tcloud";
+}
+
 function progress(int $current, int $total): void {
     echo "\rProgress: $current/$total";
 }
@@ -19,7 +23,7 @@ function error_exit(string $message): void {
 }
 
 function get_config(string $key) : string {
-    $path = getenv("HOME") . "/.tcloud/$key";
+    $path = tcloud_dir() . "/$key";
     if (!is_file($path))
         error_exit("No $key set");
     $value = file_get_contents($path);
@@ -115,19 +119,9 @@ function mkdir_remote(string $remote_path): void {
 function download(string $remote_from, string $local_to): void {
     if (file_exists($local_to))
         error_exit("Local file already exist");
-    $tcloud_dir = dirname($local_to) . "/.tcloud-download-" . basename($local_to);
+    $tcloud_dir = tcloud_dir() . "/tracking/" . hash("sha256", "download;$local_to;$remote_from");
     $local_file = "$tcloud_dir/data.tar.gz";
-    $chunk_size = 20 * 1024 * 1024 - 28;
-    if (is_dir($tcloud_dir)) {
-        $progress = (int)file_get_contents("$tcloud_dir/progress");
-        $metadata = json_decode(file_get_contents("$tcloud_dir/metadata"), true);
-        if ($progress === false || $metadata === null)
-            error_exit("Error reading files in working directory");
-        $fp = fopen($local_file, "ab");
-        if ($fp === false)
-            error_exit("Error opening local file");
-        fseek($fp, $progress * $chunk_size);
-    } else {
+    if (!is_dir($tcloud_dir)) {
         if (!mkdir($tcloud_dir, 0700))
             error_exit("Can't create directory $tcloud_dir");
         $progress = 0;
@@ -137,12 +131,21 @@ function download(string $remote_from, string $local_to): void {
         $fp = fopen($local_file, "wb");
         if ($fp === false)
             error_exit("Error opening local file");
+    } else {
+        $progress = (int)file_get_contents("$tcloud_dir/progress");
+        $metadata = json_decode(file_get_contents("$tcloud_dir/metadata"), true);
+        if ($progress === false || $metadata === null)
+            error_exit("Error reading files in working directory");
+        $fp = fopen($local_file, "ab");
+        if ($fp === false)
+            error_exit("Error opening local file");
     }
     $file_id = $metadata["file"]["id"];
     $chunk_count = $metadata["file"]["chunk_count"];
     $chunk_number = 0;
     foreach ($metadata["chunks"] as $chunk) {
         progress($chunk_number++, $chunk_count);
+        ban_avoidance();
         if ($chunk_number <= $progress)
             continue;
         $chunk_id = $chunk["id"];
@@ -154,18 +157,22 @@ function download(string $remote_from, string $local_to): void {
         if (fwrite($fp, $data) === false)
             error_exit("Error writing local file");
         file_put_contents("$tcloud_dir/progress", $chunk_number);
-        ban_avoidance();
     }
     fclose($fp);
     progress($chunk_count, $chunk_count);
-    if (!mkdir($local_to, 0700, true))
-        error_exit("Can't create directory " . $local_to);
-    exec("tar xzf " . escapeshellarg($local_file) . " -C " . escapeshellarg($local_to), $output, $err_code);
+    $file = "$tcloud_dir/unpacked";
+    if (!mkdir($file, 0700, true))
+        error_exit("Can't create directory $file");
+    exec("tar xzf " . escapeshellarg($local_file) . " -C " . escapeshellarg($file), $output, $err_code);
     if ($err_code !== 0)
         error_exit("Extracting error");
+    $file .= "/" . array_values(array_diff(scandir($file), ['.', '..']))[0];
+    if (!rename($file, $local_to))
+        error_exit("Error moving file to destination");
     unlink("$tcloud_dir/progress");
     unlink("$tcloud_dir/metadata");
     unlink($local_file);
+    rmdir("$tcloud_dir/unpacked");
     rmdir($tcloud_dir);
     echo "\nSuccess downloading\n";
 }
@@ -174,19 +181,10 @@ function upload(string $local_from, string $remote_to): void {
     if (!file_exists($local_from))
         error_exit("Local file does not exist");
     $local_from = realpath($local_from);
-    $tcloud_dir = dirname($local_from) . "/.tcloud-upload-" . basename($local_from);
+    $tcloud_dir = tcloud_dir() . "/tracking/" . hash("sha256", "upload;$local_from;$remote_to");
     $local_file = "$tcloud_dir/data.tar.gz";
     $chunk_size = 20 * 1024 * 1024 - 28;
-    if (is_dir($tcloud_dir)) {
-        $progress = (int)file_get_contents("$tcloud_dir/progress");
-        $file_id = file_get_contents("$tcloud_dir/file_id");
-        if ($progress === false || $file_id === false)
-            error_exit("Error reading files in working directory");
-        $fp = fopen($local_file, "rb");
-        if ($fp === false)
-            error_exit("Error opening local file");
-        fseek($fp, $progress * $chunk_size);
-    } else {
+    if (!is_dir($tcloud_dir)) {
         if (!mkdir($tcloud_dir, 0700))
             error_exit("Can't create directory $tcloud_dir");
         $dir = escapeshellarg(dirname($local_from));
@@ -207,6 +205,15 @@ function upload(string $local_from, string $remote_to): void {
         $fp = fopen($local_file, "rb");
         if ($fp === false)
             error_exit("Error opening local file");
+    } else {
+        $progress = (int)file_get_contents("$tcloud_dir/progress");
+        $file_id = file_get_contents("$tcloud_dir/file_id");
+        if ($progress === false || $file_id === false)
+            error_exit("Error reading files in working directory");
+        $fp = fopen($local_file, "rb");
+        if ($fp === false)
+            error_exit("Error opening local file");
+        fseek($fp, $progress * $chunk_size);
     }
     $chunk_id = $progress;
     $chunk_count = ceil(filesize($local_file) / $chunk_size);
@@ -217,6 +224,7 @@ function upload(string $local_from, string $remote_to): void {
         if (strlen($data) === 0)
             break;
         progress($chunk_id++, $chunk_count);
+        ban_avoidance();
         $data = encrypt($data);
         api_call("/add_chunk.php", [
             CURLOPT_POST => true,
@@ -228,7 +236,6 @@ function upload(string $local_from, string $remote_to): void {
             ],
         ]);
         file_put_contents("$tcloud_dir/progress", $chunk_id);
-        ban_avoidance();
     }
     fclose($fp);
     progress($chunk_count, $chunk_count);

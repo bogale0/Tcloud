@@ -1,13 +1,15 @@
 <?php
 require_once 'functions.php';
 function set_config(string $key, string $value) : void {
-    file_put_contents(getenv('HOME') . "/.tcloud/$key", $value);
+    file_put_contents(tcloud_dir() . "/$key", $value);
 }
 if ($argc < 2) {
     error_exit("Usage: tcloud <command> [options]\nCommand is one of: ls mkdir download upload remove config");
 }
-if (!is_dir(getenv('HOME') . '/.tcloud'))
-    mkdir(getenv('HOME') . '/.tcloud', 0700, true);
+if (!is_dir(tcloud_dir())) {
+    mkdir(tcloud_dir(), 0700, true);
+    mkdir(tcloud_dir() . "/tracking", 0700, true);
+}
 switch ($argv[1]) {
     case 'ls':
         if ($argc !== 3)
