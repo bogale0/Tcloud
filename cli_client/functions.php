@@ -1,6 +1,6 @@
 <?php
 function ban_avoidance() {
-    usleep(500000);
+    usleep(1000000);
 }
 
 function progress(int $current, int $total): void {
@@ -115,16 +115,37 @@ function mkdir_remote(string $remote_path): void {
 function download(string $remote_from, string $local_to): void {
     if (file_exists($local_to))
         error_exit("Local file already exist");
-    $fp = fopen($local_to, "wb");
-    if ($fp === false)
-        error_exit("Cannot open local file");
-    $metadata = api_call("/meta.php?path=" . urlencode($remote_from));
+    $tcloud_dir = dirname($local_to) . "/.tcloud-download-" . basename($local_to);
+    $local_file = "$tcloud_dir/data.tar.gz";
+    $chunk_size = 20 * 1024 * 1024 - 28;
+    if (is_dir($tcloud_dir)) {
+        $progress = (int)file_get_contents("$tcloud_dir/progress");
+        $metadata = json_decode(file_get_contents("$tcloud_dir/metadata"), true);
+        if ($progress === false || $metadata === null)
+            error_exit("Error reading files in working directory");
+        $fp = fopen($local_file, "ab");
+        if ($fp === false)
+            error_exit("Error opening local file");
+        fseek($fp, $progress * $chunk_size);
+    } else {
+        if (!mkdir($tcloud_dir, 0700))
+            error_exit("Can't create directory $tcloud_dir");
+        $progress = 0;
+        file_put_contents("$tcloud_dir/progress", $progress);
+        $metadata = api_call("/meta.php?path=" . urlencode($remote_from));
+        file_put_contents("$tcloud_dir/metadata", json_encode($metadata));
+        $fp = fopen($local_file, "wb");
+        if ($fp === false)
+            error_exit("Error opening local file");
+    }
     $file_id = $metadata["file"]["id"];
     $chunk_count = $metadata["file"]["chunk_count"];
     $chunk_number = 0;
     foreach ($metadata["chunks"] as $chunk) {
-        $chunk_id = $chunk["id"];
         progress($chunk_number++, $chunk_count);
+        if ($chunk_number <= $progress)
+            continue;
+        $chunk_id = $chunk["id"];
         $chunk_path = api_call("/chunk.php?file_id=$file_id&chunk_id=$chunk_id")["path"];
         $chunk_data = curl_response(get_config("address") . $chunk_path, false, [
             CURLOPT_RETURNTRANSFER => true,
@@ -132,10 +153,20 @@ function download(string $remote_from, string $local_to): void {
         $data = decrypt($chunk_data);
         if (fwrite($fp, $data) === false)
             error_exit("Error writing local file");
+        file_put_contents("$tcloud_dir/progress", $chunk_number);
         ban_avoidance();
     }
     fclose($fp);
     progress($chunk_count, $chunk_count);
+    if (!mkdir($local_to, 0700, true))
+        error_exit("Can't create directory " . $local_to);
+    exec("tar xzf " . escapeshellarg($local_file) . " -C " . escapeshellarg($local_to), $output, $err_code);
+    if ($err_code !== 0)
+        error_exit("Extracting error");
+    unlink("$tcloud_dir/progress");
+    unlink("$tcloud_dir/metadata");
+    unlink($local_file);
+    rmdir($tcloud_dir);
     echo "\nSuccess downloading\n";
 }
 
@@ -144,23 +175,40 @@ function upload(string $local_from, string $remote_to): void {
         error_exit("Local file does not exist");
     $local_from = realpath($local_from);
     $tcloud_dir = dirname($local_from) . "/.tcloud-upload-" . basename($local_from);
-    if (!is_dir($tcloud_dir) && !mkdir($tcloud_dir, 0700))
-        error_exit("Can't create directory $tcloud_dir");
     $local_file = "$tcloud_dir/data.tar.gz";
-    exec("tar czf $local_file $local_from", $output, $err_code);
-    if ($err_code !== 0)
-        error_exit("Archiving error");
-    file_put_contents("$tcloud_dir/progress", 0);
-    $fp = fopen($local_file, "rb");
-    $file_id = api_call("/mkfile.php", [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => [
-            "path" => $remote_to,
-            "type" => "file",
-        ],
-    ])["file_id"];
-    $chunk_id = 0;
     $chunk_size = 20 * 1024 * 1024 - 28;
+    if (is_dir($tcloud_dir)) {
+        $progress = (int)file_get_contents("$tcloud_dir/progress");
+        $file_id = file_get_contents("$tcloud_dir/file_id");
+        if ($progress === false || $file_id === false)
+            error_exit("Error reading files in working directory");
+        $fp = fopen($local_file, "rb");
+        if ($fp === false)
+            error_exit("Error opening local file");
+        fseek($fp, $progress * $chunk_size);
+    } else {
+        if (!mkdir($tcloud_dir, 0700))
+            error_exit("Can't create directory $tcloud_dir");
+        $dir = escapeshellarg(dirname($local_from));
+        $name = escapeshellarg(basename($local_from));
+        exec("tar czf " . escapeshellarg($local_file) . " -C $dir $name", $output, $err_code);
+        if ($err_code !== 0)
+            error_exit("Archiving error");
+        $progress = 0;
+        file_put_contents("$tcloud_dir/progress", $progress);
+        $file_id = api_call("/mkfile.php", [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => [
+                "path" => $remote_to,
+                "type" => "file",
+            ],
+        ])["file_id"];
+        file_put_contents("$tcloud_dir/file_id", $file_id);
+        $fp = fopen($local_file, "rb");
+        if ($fp === false)
+            error_exit("Error opening local file");
+    }
+    $chunk_id = $progress;
     $chunk_count = ceil(filesize($local_file) / $chunk_size);
     while (!feof($fp)) {
         $data = fread($fp, $chunk_size);
@@ -179,10 +227,15 @@ function upload(string $local_from, string $remote_to): void {
                 "chunk" => new CURLStringFile($data, "chunk"),
             ],
         ]);
+        file_put_contents("$tcloud_dir/progress", $chunk_id);
         ban_avoidance();
     }
     fclose($fp);
     progress($chunk_count, $chunk_count);
+    unlink("$tcloud_dir/progress");
+    unlink("$tcloud_dir/file_id");
+    unlink($local_file);
+    rmdir($tcloud_dir);
     echo "\nSuccess uploading\n";
 }
 
