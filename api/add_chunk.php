@@ -36,7 +36,7 @@ $fp = fopen($lock_file, "c");
 if (!flock($fp, LOCK_EX | LOCK_NB))
     error_exit(423, "Chunk is being uploaded by another process");
 
-$chat_id = trim(file_get_contents(__DIR__ . "/../secret/tgchat.id"));
+$chat_id = sercet_value("tgchat.id");
 $response = api_call("sendDocument", [
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => [

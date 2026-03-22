@@ -1,5 +1,5 @@
 <?php
-$ttl = 3 * 60;
+$ttl = 5 * 60;
 $time = time();
 foreach (scandir(__DIR__) as $entry) {
     if ($entry === "." || $entry === ".." || $entry === "cleanup.php")
@@ -7,7 +7,7 @@ foreach (scandir(__DIR__) as $entry) {
     $entry = __DIR__ . "/$entry";
     if (!is_file($entry))
         continue;
-    $delay = $time - filemtime($entry);
+    $delay = $time - filectime($entry);
     if ($delay > $ttl)
         unlink($entry);
 }
