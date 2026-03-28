@@ -75,8 +75,7 @@ function api_call(string $method, array $options = []) : mixed {
         $url = "$host/file/$bot_name/" . $options["path"];
         $options = [CURLOPT_RETURNTRANSFER => true];
         $is_json = false;
-    }
-    else {
+    } else {
         $url = "$host/$bot_name/$method";
         $is_json = true;
     }

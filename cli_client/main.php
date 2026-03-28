@@ -4,7 +4,7 @@ function set_config(string $key, string $value) : void {
     file_put_contents(tcloud_dir() . "/$key", $value);
 }
 if ($argc < 2) {
-    error_exit("Usage: tcloud <command> [options]\nCommand is one of: ls mkdir download upload remove config");
+    error_exit("Usage: tcloud <command> [options]\nCommand is one of: ls mkdir rm download upload config");
 }
 if (!is_dir(tcloud_dir())) {
     mkdir(tcloud_dir(), 0700, true);
@@ -23,6 +23,15 @@ switch ($argv[1]) {
         mkdir_remote($argv[2]);
         break;
 
+    case 'rm':
+        if ($argc == 2)
+            error_exit("Usage: tcloud rm [-r] <remote_path>");
+        if ($argv[2] == "-r")
+            rm($argv[3], true);
+        else
+            rm($argv[2]);
+        break;
+
     case 'download':
         if ($argc !== 4)
             error_exit("Usage: tcloud download <remote_path> <local_path>");
@@ -33,12 +42,6 @@ switch ($argv[1]) {
         if ($argc !== 4)
             error_exit("Usage: tcloud upload <local_path> <remote_path>");
         upload($argv[2], $argv[3]);
-        break;
-
-    case 'remove':
-        if ($argc !== 3)
-            error_exit("Usage: tcloud remove <remote_path>");
-        remove($argv[2]);
         break;
 
     case 'config':
