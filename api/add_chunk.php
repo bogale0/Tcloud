@@ -30,20 +30,25 @@ $stmt = $pdo->prepare("select 1 from chunks where file_id = ? and chunk_id = ?")
 $stmt->execute([$file_id, $chunk_id]);
 if ($stmt->fetch() !== false)
     error_exit(409, "Chunk already exists");
-$chunk_name = "chunk{$file_id}_{$chunk_id}";
-$lock_file = "/tmp/$chunk_name.lock";
-$fp = fopen($lock_file, "c");
-if (!flock($fp, LOCK_EX | LOCK_NB))
-    error_exit(423, "Chunk is being uploaded by another process");
-
-$chat_id = sercet_value("tgchat.id");
+$usetime_file = __DIR__ . "/downloads/usetime";
+$fp = fopen("$usetime_file.lock", "c");
+if (!flock($fp, LOCK_EX))
+    error_exit(423, "Error with locking usetime");
+$usetime = "";
+if (is_file($usetime_file) && ($usetime = file_get_contents($usetime_file)) === false)
+    error_exit(423, "Error with reading usetime");
+$delay = (float)$usetime + 1 - microtime(true);
+if ($delay > 0)
+    usleep($delay * 1e6);
+$chat_id = secret_value("tgchat.id");
 $response = api_call("sendDocument", [
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => [
         "chat_id" => $chat_id,
-        "document" => new CURLFile($_FILES["chunk"]["tmp_name"], null, $chunk_name),
+        "document" => new CURLFile($_FILES["chunk"]["tmp_name"], null, "chunk{$file_id}_{$chunk_id}"),
     ],
 ])["result"];
+file_put_contents($usetime_file, microtime(true));
 $tg_msg_id = $response["message_id"];
 $tg_file_id = $response["document"]["file_id"];
 $file_size = $response["document"]["file_size"];
@@ -53,6 +58,6 @@ $stmt = $pdo->prepare("insert into chunks (file_id, chunk_id, chunk_hash, tg_fil
 $stmt->execute([$file_id, $chunk_id, $hash, $tg_file_id, $tg_msg_id]);
 flock($fp, LOCK_UN);
 fclose($fp);
-unlink($lock_file);
+unlink("$usetime_file.lock");
 success_exit(["ok" => true]);
 ?>

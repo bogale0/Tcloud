@@ -20,21 +20,28 @@ $chunk_path = __DIR__ . $chunk_name;
 if (file_exists($chunk_path) && hash_file("sha256", $chunk_path, true) === $chunk["chunk_hash"])
     success_exit(["ok" => true, "path" => $chunk_name]);
 
+$usetime_file = __DIR__ . "/downloads/usetime";
+$fp = fopen("$usetime_file.lock", "c");
+if (!flock($fp, LOCK_EX))
+    error_exit(423, "Error with locking usetime");
+$usetime = "";
+if (is_file($usetime_file) && ($usetime = file_get_contents($usetime_file)) === false)
+    error_exit(423, "Error with reading usetime");
+$delay = (float)$usetime + 1 - microtime(true);
+if ($delay > 0)
+    usleep($delay * 1e6);
 $response = api_call("getFile", [
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => [
         "file_id" => $chunk["tg_file_id"],
     ],
 ]);
-$fp = fopen("$chunk_path.lock", "c");
-if (!flock($fp, LOCK_EX | LOCK_NB))
-    error_exit(423, "Chunk is being downloaded by another process");
 $chunk_data = api_call("file", ["path" => $response["result"]["file_path"]]);
 if (hash("sha256", $chunk_data, true) !== $chunk["chunk_hash"])
     error_exit(500, "Chunk hash mismatch after receiving " . strlen($chunk_data) . " for $chunk_name");
 file_put_contents($chunk_path, $chunk_data);
 flock($fp, LOCK_UN);
 fclose($fp);
-unlink("$chunk_path.lock");
+unlink("$usetime_file.lock");
 success_exit(["ok" => true, "path" => $chunk_name]);
 ?>

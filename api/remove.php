@@ -4,9 +4,13 @@ if ($_SERVER["REQUEST_METHOD"] !== "DELETE")
     error_exit(405, "Method not allowed");
 if (!isset($_GET["path"]))
     error_exit(400, "No path specified");
+if (isset($_GET["recursive"]))
+    $is_recursive = $_GET["recursive"] === "1";
 $target = check_path($_GET["path"], true);
-if ($target == __DIR__ . "/../storage")
+if ($target === storage_dir())
     error_exit(400, "Cannot remove root directory");
+if (!$is_recursive && is_dir($target))
+    error_exit(400, "Use recursive option to remove directory");
 $pdo = db_init();
 
 if (is_dir($target)) {
@@ -32,8 +36,7 @@ if (is_dir($target)) {
     unlink("$target/.lock");
     if (!rmdir($target))
         error_exit(500, "Cannot remove directory");
-}
-elseif (is_file($target)) {
+} elseif (is_file($target)) {
     $stmt = $pdo->prepare("delete from files where file_id = ?");
     $stmt->execute([file_get_contents($target)]);
     unlink($target);

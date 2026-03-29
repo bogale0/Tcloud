@@ -1,7 +1,7 @@
 <?php
 check_bearer();
 
-function sercet_value($key) : string {
+function secret_value($key) : string {
     return trim(file_get_contents(outer_dir() . "/secret/$key"));
 }
 
@@ -25,7 +25,7 @@ function error_exit(int $error_code, string $message) : void {
 }
 
 function db_init() : PDO {
-    $password = sercet_value("dbuser.pswd");
+    $password = secret_value("dbuser.pswd");
     $pdo = new PDO("mysql:host=localhost;dbname=tcloud;charset=utf8mb4", "tcloud", $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
@@ -38,7 +38,7 @@ function check_bearer() : void {
     if (!isset($headers["Authorization"]))
         error_exit(401, "Missing Authorization header");
     $token = $headers["Authorization"];
-    $expected_token = sercet_value("bearer.token");
+    $expected_token = secret_value("bearer.token");
     if ($token !== "Bearer $expected_token")
         error_exit(403, "Invalid token");
 }
@@ -70,7 +70,7 @@ function outer_dir(): string {
 
 function api_call(string $method, array $options = []) : mixed {
     $host = "https://api.telegram.org";
-    $bot_name = "bot" . sercet_value("tgbot.id");
+    $bot_name = "bot" . secret_value("tgbot.id");
     if ($method === "file") {
         $url = "$host/file/$bot_name/" . $options["path"];
         $options = [CURLOPT_RETURNTRANSFER => true];

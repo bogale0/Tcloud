@@ -24,6 +24,7 @@ switch ($_POST["type"]) {
         fwrite($fp, $file_id);
         flock($fp, LOCK_UN);
         fclose($fp);
+        chmod($target, 0600);
         $result["file_id"] = $file_id;
         break;
     default:

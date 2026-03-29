@@ -133,9 +133,10 @@ function ls(string $remote_path): void {
             $unit_index++;
         }
         $filesize = round($filesize, 2);
-        $units = ["B", "KiB", "MiB", "GiB", "TiB"];
+        $units = ["B  ", "KiB", "MiB", "GiB", "TiB"];
         $unit = $units[$unit_index];
-        echo "file:  $filename  $filesize $unit\n";
+        $created_at = $file["created_at"];
+        echo "file:  $filename  $filesize $unit  $created_at\n";
     }
 }
 
