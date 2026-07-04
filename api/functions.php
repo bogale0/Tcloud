@@ -115,7 +115,7 @@ function curl_response(string $url, bool $is_json, array $options) : mixed {
     $error = curl_error($ch);
     curl_close($ch);
     if ($response === false)
-        error_exit("Curl error: " . $error);
+        error_exit(500, "Curl error: " . $error);
     if (!$is_json)
         return $response;
     $response = json_decode($response, true);
